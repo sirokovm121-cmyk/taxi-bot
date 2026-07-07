@@ -4,10 +4,10 @@ from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ========== ТОКЕН БЕРЁМ ИЗ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ (БЕЗОПАСНО!) ==========
+# ========== ТОКЕН ==========
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("❌ Токен не найден! Установите TELEGRAM_BOT_TOKEN в переменных окружения.")
+    raise ValueError("❌ Токен не найден! Установите TELEGRAM_BOT_TOKEN")
 
 # ========== ДАННЫЕ ==========
 DATA_FILE = "taxi_data.json"
@@ -27,7 +27,10 @@ DEFAULT_PARTS = {
 }
 
 def load_json(file, default):
-    return json.load(open(file, "r", encoding="utf-8")) if os.path.exists(file) else default
+    if os.path.exists(file):
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return default
 
 def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
@@ -75,19 +78,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🚕 Главное меню", reply_markup=main_menu())
         return
 
-    # Добавить машину
     if query.data == "add_car":
         context.user_data['action'] = 'add_car'
         await query.edit_message_text("🚗 Введите госномер машины:", reply_markup=back_button())
         return
 
-    # Добавить запчасть
     if query.data == "add_part":
         context.user_data['action'] = 'add_part_name'
         await query.edit_message_text("🔧 Введите название запчасти:", reply_markup=back_button())
         return
 
-    # Список запчастей
     if query.data == "list_parts":
         text = "📋 **Запчасти:**\n\n"
         for part, vals in parts.items():
@@ -97,7 +97,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_button())
         return
 
-    # Добавить замену
     if query.data == "add_event":
         if not data:
             await query.edit_message_text("❌ Сначала добавьте машину!", reply_markup=main_menu())
@@ -108,7 +107,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🚗 Выберите машину:", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # Статистика
     if query.data == "stats":
         if not data:
             await query.edit_message_text("❌ Нет машин!", reply_markup=main_menu())
@@ -119,7 +117,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🚗 Выберите машину:", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # Поиск
     if query.data == "search":
         if not data:
             await query.edit_message_text("❌ Нет машин!", reply_markup=main_menu())
@@ -130,7 +127,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔍 Выберите запчасть:", reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # Мои машины
     if query.data == "my_cars":
         if not data:
             await query.edit_message_text("📭 Нет машин.", reply_markup=main_menu())
@@ -141,7 +137,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_button())
         return
 
-    # Выбор машины
     if query.data.startswith("car_"):
         plate = query.data[4:]
         action = context.user_data.get('action')
@@ -170,7 +165,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text += "Нет записей."
             await query.edit_message_text(text, parse_mode="Markdown", reply_markup=back_button())
 
-    # Выбор запчасти
     if query.data.startswith("part_"):
         part = query.data[5:]
         action = context.user_data.get('action')
@@ -289,23 +283,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
 
-# ========== ФУНКЦИЯ ЗАПУСКА (ДЛЯ FLASK) ==========
-def run_bot():
-    """Запускает бота (вызывается из app.py)"""
+# ========== ФУНКЦИЯ ЗАПУСКА ==========
+def main():
+    """Главная функция запуска бота"""
+    print("🚕 Запуск Такси-Трекера...")
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
-    print("🤖 Бот Такси-Трекер успешно запущен!")
+    print("🤖 Бот Такси-Трекер успешно запущен и работает 24/7!")
     app.run_polling()
 
-# ========== ЗАПУСК (ДЛЯ ЛОКАЛЬНОГО ТЕСТИРОВАНИЯ) ==========
+# ========== ЛОКАЛЬНЫЙ ЗАПУСК ==========
 if __name__ == "__main__":
-    # Для локального теста - просто запускаем бота
-    # Но сначала проверяем, есть ли токен
-    if not TOKEN:
-        print("❌ ОШИБКА: Токен не найден!")
-        print("Установите переменную окружения TELEGRAM_BOT_TOKEN")
-    else:
-        print("🚕 Запуск Такси-Трекера...")
-        run_bot()
+    main()

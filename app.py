@@ -2,31 +2,44 @@ from flask import Flask
 import os
 import threading
 import time
+import sys
 
 app = Flask(__name__)
 
 @app.route('/')
 def health_check():
-    return "Бот работает!"
+    return "🚕 Такси-Трекер бот работает!"
 
 @app.route('/ping')
 def ping():
     return "Pong!", 200
 
 def start_bot():
-    time.sleep(3)
+    """Запускает бота в отдельном потоке"""
+    time.sleep(2)
     try:
-        import bot
-        bot.run_bot()
+        # Импортируем и запускаем бота
+        from bot import main
+        main()
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"❌ Ошибка запуска бота: {e}")
+        sys.exit(1)
 
 if __name__ == '__main__':
-    if not os.environ.get("TELEGRAM_BOT_TOKEN"):
-        print("❌ Нет токена!")
-    else:
-        bot_thread = threading.Thread(target=start_bot)
-        bot_thread.daemon = True
-        bot_thread.start()
-        port = int(os.environ.get('PORT', 5000))
-        app.run(host='0.0.0.0', port=port)
+    # Проверяем токен
+    token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        print("❌ ОШИБКА: Переменная TELEGRAM_BOT_TOKEN не установлена!")
+        print("Добавьте её в настройках Render!")
+        sys.exit(1)
+    
+    print("🚀 Запуск веб-сервера и бота...")
+    
+    # Запускаем бота в фоновом потоке
+    bot_thread = threading.Thread(target=start_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+    
+    # Запускаем Flask
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)

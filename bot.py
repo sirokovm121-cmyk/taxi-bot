@@ -1,15 +1,25 @@
 import json
 import os
+import threading
+import time
 from datetime import datetime
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
-# ========== ТОКЕН ==========
+# ============================================================
+# 1. ТОКЕН (из переменной окружения — БЕЗОПАСНО!)
+# ============================================================
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("❌ Токен не найден! Установите TELEGRAM_BOT_TOKEN")
+    print("❌ ОШИБКА: переменная TELEGRAM_BOT_TOKEN не найдена!")
+    print("👉 Добавьте её в настройках Render (Environment → Environment Variables)")
+    exit(1)
 
-# ========== ДАННЫЕ ==========
+# ============================================================
+# 2. РАБОТА С ДАННЫМИ (JSON-файлы)
+# ============================================================
 DATA_FILE = "taxi_data.json"
 PARTS_FILE = "parts_config.json"
 
@@ -42,7 +52,9 @@ def get_data():
 def get_parts():
     return load_json(PARTS_FILE, DEFAULT_PARTS.copy())
 
-# ========== КЛАВИАТУРЫ ==========
+# ============================================================
+# 3. КЛАВИАТУРЫ
+# ============================================================
 def main_menu():
     keyboard = [
         [InlineKeyboardButton("🚗 Добавить машину", callback_data="add_car")],
@@ -58,7 +70,9 @@ def main_menu():
 def back_button():
     return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="back")]])
 
-# ========== КОМАНДЫ ==========
+# ============================================================
+# 4. ОБРАБОТЧИКИ КОМАНД
+# ============================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🚕 **Такси-Трекер**\n\n"
@@ -283,17 +297,40 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=main_menu()
         )
 
-# ========== ФУНКЦИЯ ЗАПУСКА ==========
+# ============================================================
+# 5. ПРОСТОЙ ВЕБ-СЕРВЕР ДЛЯ RENDER (чтобы не "засыпал")
+# ============================================================
+class KeepAliveHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is alive!")
+
+def run_keepalive():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), KeepAliveHandler)
+    print(f"🌐 Keep-alive сервер запущен на порту {port}")
+    server.serve_forever()
+
+# ============================================================
+# 6. ЗАПУСК
+# ============================================================
 def main():
-    """Главная функция запуска бота"""
     print("🚕 Запуск Такси-Трекера...")
+    
+    # Запускаем keep-alive сервер в фоновом потоке
+    thread = threading.Thread(target=run_keepalive)
+    thread.daemon = True
+    thread.start()
+    
+    # Запускаем бота
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+    
     print("🤖 Бот Такси-Трекер успешно запущен и работает 24/7!")
     app.run_polling()
 
-# ========== ЛОКАЛЬНЫЙ ЗАПУСК ==========
 if __name__ == "__main__":
     main()
